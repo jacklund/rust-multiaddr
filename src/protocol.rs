@@ -49,6 +49,8 @@ const WS: u32 = 477;
 const WS_WITH_PATH: u32 = 4770; // Note: not standard
 const WSS: u32 = 478;
 const WSS_WITH_PATH: u32 = 4780; // Note: not standard
+const TOR: u32 = 481;
+const SOCKS5: u32 = 482;
 
 const PATH_SEGMENT_ENCODE_SET: &percent_encoding::AsciiSet = &percent_encoding::CONTROLS
     .add(b'%')
@@ -102,6 +104,8 @@ pub enum Protocol<'a> {
     Utp,
     Ws(Cow<'a, str>),
     Wss(Cow<'a, str>),
+    Tor,
+    Socks5(Ipv4Addr, u16),
 }
 
 impl<'a> Protocol<'a> {
@@ -207,6 +211,21 @@ impl<'a> Protocol<'a> {
             "memory" => {
                 let s = iter.next().ok_or(Error::InvalidProtocolString)?;
                 Ok(Protocol::Memory(s.parse()?))
+            }
+            "tor" => Ok(Protocol::Tor),
+            "socks5" => {
+                let ip4 = iter
+                    .next()
+                    .ok_or(Error::InvalidProtocolString)
+                    .and_then(|s| {
+                        Ipv4Addr::from_str(s).map_err(|_| Error::InvalidProtocolString)
+                    })?;
+
+                let port = iter
+                    .next()
+                    .ok_or(Error::InvalidProtocolString)
+                    .and_then(|p| p.parse::<u16>().map_err(|_| Error::InvalidProtocolString))?;
+                Ok(Protocol::Socks5(ip4, port))
             }
             unknown => Err(Error::UnknownProtocolString(unknown.to_string())),
         }
@@ -470,6 +489,12 @@ impl<'a> Protocol<'a> {
                 w.write_all(encode::u32(MEMORY, &mut buf))?;
                 w.write_u64::<BigEndian>(*port)?
             }
+            Protocol::Tor => w.write_all(encode::u32(TOR, &mut buf))?,
+            Protocol::Socks5(addr, port) => {
+                w.write_all(encode::u32(SOCKS5, &mut buf))?;
+                w.write_all(&addr.octets())?;
+                w.write_u16::<BigEndian>(*port)?
+            }
         }
         Ok(())
     }
@@ -508,6 +533,8 @@ impl<'a> Protocol<'a> {
             Utp => Utp,
             Ws(cow) => Ws(Cow::Owned(cow.into_owned())),
             Wss(cow) => Wss(Cow::Owned(cow.into_owned())),
+            Tor => Tor,
+            Socks5(addr, port) => Socks5(addr, port),
         }
     }
 }
@@ -570,6 +597,8 @@ impl<'a> fmt::Display for Protocol<'a> {
                     percent_encoding::percent_encode(s.as_bytes(), PATH_SEGMENT_ENCODE_SET);
                 write!(f, "/x-parity-wss/{}", encoded)
             }
+            Tor => f.write_str("/tor"),
+            Socks5(addr, port) => write!(f, "/socks5/{}:{}", addr, port),
         }
     }
 }
