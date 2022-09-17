@@ -131,6 +131,8 @@ impl Arbitrary for Proto {
                 Proto(Onion3((a, std::cmp::max(1, u16::arbitrary(g))).into()))
             }
             25 => Proto(Tls),
+            26 => Proto(Tor),
+            27 => Proto(Socks5(Ma::arbitrary(g).0)),
             _ => panic!("outside range"),
         }
     }
@@ -355,6 +357,16 @@ fn construct_success() {
             Udp(1234),
             WebRTC,
             Certhash(Multihash::from_bytes(&decoded).unwrap()),
+        ],
+    );
+
+    ma_valid(
+        "/tcp/1234/dns/www.google.com/socks5/tcp/8080/ip4/127.0.0.1",
+        "0604D2350E7777772E676F6F676C652E636F6DE203061F90047F000001",
+        vec![
+            Tcp(1234),
+            Dns(Cow::Borrowed("www.google.com")),
+            Socks5(Multiaddr::from_str("/tcp/8080/ip4/127.0.0.1").expect("String should be valid")),
         ],
     );
 }

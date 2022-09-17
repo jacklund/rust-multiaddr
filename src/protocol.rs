@@ -1,5 +1,5 @@
 use crate::onion_addr::Onion3Addr;
-use crate::{Error, Result};
+use crate::{Error, Multiaddr, Result};
 use arrayref::array_ref;
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 use data_encoding::BASE32;
@@ -105,7 +105,7 @@ pub enum Protocol<'a> {
     Ws(Cow<'a, str>),
     Wss(Cow<'a, str>),
     Tor,
-    Socks5(Ipv4Addr, u16),
+    Socks5(Multiaddr),
 }
 
 impl<'a> Protocol<'a> {
@@ -214,18 +214,10 @@ impl<'a> Protocol<'a> {
             }
             "tor" => Ok(Protocol::Tor),
             "socks5" => {
-                let ip4 = iter
-                    .next()
-                    .ok_or(Error::InvalidProtocolString)
-                    .and_then(|s| {
-                        Ipv4Addr::from_str(s).map_err(|_| Error::InvalidProtocolString)
-                    })?;
-
-                let port = iter
-                    .next()
-                    .ok_or(Error::InvalidProtocolString)
-                    .and_then(|p| p.parse::<u16>().map_err(|_| Error::InvalidProtocolString))?;
-                Ok(Protocol::Socks5(ip4, port))
+                let addr_string = format!("/{}", iter.collect::<Vec<&str>>().join("/"));
+                let addr =
+                    Multiaddr::from_str(&addr_string).map_err(|_| Error::InvalidProtocolString)?;
+                Ok(Protocol::Socks5(addr))
             }
             unknown => Err(Error::UnknownProtocolString(unknown.to_string())),
         }
@@ -372,6 +364,17 @@ impl<'a> Protocol<'a> {
                 let (data, rest) = split_at(n, input)?;
                 Ok((Protocol::Wss(Cow::Borrowed(str::from_utf8(data)?)), rest))
             }
+            TOR => Ok((Protocol::Tor, input)),
+            SOCKS5 => {
+                let mut addr = Multiaddr::empty();
+                let mut data = input;
+                while !data.is_empty() {
+                    let (protocol, rest) = Protocol::from_bytes(data)?;
+                    addr.push(protocol);
+                    data = rest;
+                }
+                Ok((Protocol::Socks5(addr), data))
+            }
             _ => Err(Error::UnknownProtocolId(id)),
         }
     }
@@ -490,10 +493,9 @@ impl<'a> Protocol<'a> {
                 w.write_u64::<BigEndian>(*port)?
             }
             Protocol::Tor => w.write_all(encode::u32(TOR, &mut buf))?,
-            Protocol::Socks5(addr, port) => {
+            Protocol::Socks5(addr) => {
                 w.write_all(encode::u32(SOCKS5, &mut buf))?;
-                w.write_all(&addr.octets())?;
-                w.write_u16::<BigEndian>(*port)?
+                w.write_all(&addr.bytes)?;
             }
         }
         Ok(())
@@ -534,7 +536,7 @@ impl<'a> Protocol<'a> {
             Ws(cow) => Ws(Cow::Owned(cow.into_owned())),
             Wss(cow) => Wss(Cow::Owned(cow.into_owned())),
             Tor => Tor,
-            Socks5(addr, port) => Socks5(addr, port),
+            Socks5(addr) => Socks5(addr),
         }
     }
 }
@@ -598,7 +600,7 @@ impl<'a> fmt::Display for Protocol<'a> {
                 write!(f, "/x-parity-wss/{}", encoded)
             }
             Tor => f.write_str("/tor"),
-            Socks5(addr, port) => write!(f, "/socks5/{}:{}", addr, port),
+            Socks5(addr) => write!(f, "/socks5{}", addr),
         }
     }
 }
