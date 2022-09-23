@@ -214,9 +214,13 @@ impl<'a> Protocol<'a> {
             }
             "tor" => Ok(Protocol::Tor),
             "socks5" => {
-                let addr_string = format!("/{}", iter.collect::<Vec<&str>>().join("/"));
-                let addr =
-                    Multiaddr::from_str(&addr_string).map_err(|_| Error::InvalidProtocolString)?;
+                let parts = iter.collect::<Vec<&str>>();
+                let addr = if !parts.is_empty() {
+                    let addr_string = format!("/{}", parts.join("/"));
+                    Multiaddr::from_str(&addr_string).map_err(|_| Error::InvalidProtocolString)?
+                } else {
+                    Multiaddr::empty()
+                };
                 Ok(Protocol::Socks5(addr))
             }
             unknown => Err(Error::UnknownProtocolString(unknown.to_string())),

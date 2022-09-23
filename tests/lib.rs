@@ -369,6 +369,16 @@ fn construct_success() {
             Socks5(Multiaddr::from_str("/tcp/8080/ip4/127.0.0.1").expect("String should be valid")),
         ],
     );
+
+    ma_valid(
+        "/tcp/1234/dns/www.google.com/socks5",
+        "0604D2350E7777772E676F6F676C652E636F6DE203",
+        vec![
+            Tcp(1234),
+            Dns(Cow::Borrowed("www.google.com")),
+            Socks5(Multiaddr::empty()),
+        ],
+    );
 }
 
 #[test]
