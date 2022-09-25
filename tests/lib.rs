@@ -361,21 +361,21 @@ fn construct_success() {
     );
 
     ma_valid(
-        "/tcp/1234/dns/www.google.com/socks5/tcp/8080/ip4/127.0.0.1",
-        "0604D2350E7777772E676F6F676C652E636F6DE203061F90047F000001",
+        "/dns/www.google.com/tcp/1234/socks5/ip4/127.0.0.1/tcp/8080",
+        "350E7777772E676F6F676C652E636F6D0604D2E203047F000001061F90",
         vec![
-            Tcp(1234),
             Dns(Cow::Borrowed("www.google.com")),
-            Socks5(Multiaddr::from_str("/tcp/8080/ip4/127.0.0.1").expect("String should be valid")),
+            Tcp(1234),
+            Socks5(Multiaddr::from_str("/ip4/127.0.0.1/tcp/8080").expect("String should be valid")),
         ],
     );
 
     ma_valid(
-        "/tcp/1234/dns/www.google.com/socks5",
-        "0604D2350E7777772E676F6F676C652E636F6DE203",
+        "/dns/www.google.com/tcp/1234/socks5",
+        "350E7777772E676F6F676C652E636F6D0604D2E203",
         vec![
-            Tcp(1234),
             Dns(Cow::Borrowed("www.google.com")),
+            Tcp(1234),
             Socks5(Multiaddr::empty()),
         ],
     );
